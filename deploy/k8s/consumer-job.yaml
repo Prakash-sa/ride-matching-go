@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ride-matching-consumer
+spec:
+  template:
+    metadata:
+      labels:
+        app: ride-matching-consumer
+    spec:
+      containers:
+        - name: consumer
+          image: ghcr.io/example/ride-matching:latest
+          command:
+            [
+              "/bin/sh",
+              "-c",
+              "KAFKA_BROKERS=$(KAFKA_BROKERS) REDIS_ADDR=$(REDIS_ADDR) /bin/consumer",
+            ]
+          env:
+            - name: KAFKA_BROKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: ride-matching-config
+                  key: KAFKA_BROKERS
+            - name: REDIS_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: ride-matching-config
+                  key: REDIS_ADDR
+      restartPolicy: OnFailure

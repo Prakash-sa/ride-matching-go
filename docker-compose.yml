@@ -1,0 +1,43 @@
+version: "3.8"
+services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ride
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+    ports:
+      - "5432:5432"
+  redpanda:
+    image: vectorized/redpanda:latest
+    command:
+      [
+        "redpanda",
+        "start",
+        "--overprovisioned",
+        "--smp 1",
+        "--memory 1G",
+        "--reserve-memory 0M",
+        "--node-id 0",
+        "--check=false",
+      ]
+    ports:
+      - "9092:9092"
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+
+networks:
+  default:
+    driver: bridge

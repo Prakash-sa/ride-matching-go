@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: "ride-matching-server"
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+  - job_name: "ride-matching-consumer"
+    static_configs:
+      - targets: ["host.docker.internal:2112"]
+  - job_name: "redis"
+    static_configs:
+      - targets: ["host.docker.internal:9121"]
