@@ -61,16 +61,25 @@ curl -XPOST localhost:8080/api/v1/rides/request -d '{"rider_id":"r1","origin":{"
 Observability
 
 - Prometheus metrics are exposed at `/metrics` on the server (default :8080) and at `:2112` in the consumer process. The compose includes `prometheus` and `grafana` services for local dashboards.
+- HTTP middleware now emits structured JSON logs (request id, latency, status) and Prometheus metrics (`ride_matching_http_requests_total`, `ride_matching_http_request_duration_seconds`) for each API route.
 
 Configuration / environment variables
 
 - REDIS_ADDR — Redis host:port (e.g. localhost:6379)
+- REDIS_PASSWORD — optional password when Redis auth is enabled
+- REDIS_GEO_KEY — Redis key used for driver GEO data (default: `drivers_geo`)
 - KAFKA_BROKERS — comma-separated broker list (e.g. localhost:9092)
 - KAFKA_TOPIC — topic for driver locations (default: `driver-locations`)
 - KAFKA_GROUP — consumer group id for the consumer (default: `ride-matching-consumer`)
 - PG_DSN — Postgres DSN for `PostgresStore` (if set, TripStore defaults to Postgres)
 - STRIPE_API_KEY — Stripe secret key for payments flows
-- MIGRATE — when `true` the k8s initContainer or server may run migrations (demo placeholder)
+- HTTP_ADDR — HTTP bind address (default: `:8080`)
+- HTTP_READ_TIMEOUT / HTTP_WRITE_TIMEOUT / HTTP_IDLE_TIMEOUT — duration strings to tighten HTTP server timeouts (defaults: `5s`, `10s`, `120s`)
+- HTTP_SHUTDOWN_TIMEOUT — graceful shutdown timeout (default: `15s`)
+- MATCHER_DEFAULT_SPEED_MPS — fallback driver speed used when computing ETA (default: `10`)
+- MATCHER_TOP_N — number of drivers to score per match request (default: `8`)
+- LOG_LEVEL — `debug`, `info`, `warn`, or `error` (default: `info`)
+- MIGRATE — when `true` and `PG_DSN` is set, the server will run `migrations/001_create_rides.sql` before starting
 
 Kubernetes
 
@@ -86,8 +95,10 @@ Notes and next steps
 - This repo is a prototype and intended as scaffolding: production hardening required for HA, security, secrets management, retries, idempotency, and observability.
 - Recommended next steps:
   - Configure TLS/auth for Kafka and Redis in your environment
-  - Use a robust migration tool (e.g. golang-migrate) instead of the demo initContainer
-  - Add end-to-end integration tests that run against the compose stack
-  - Add dashboards and alerting rules in Grafana/Prometheus
+- Use a robust migration tool (e.g. golang-migrate) instead of the demo initContainer
+- Add end-to-end integration tests that run against the compose stack
+- Add dashboards and alerting rules in Grafana/Prometheus
 
-If you want, I can wire OSRM configuration into the server wiring (`NewServerFromEnv`), add Stripe hold/capture into the ride lifecycle, and add a Grafana dashboard for the provided Prometheus metrics.
+## Production hardening roadmap
+
+Refer to `docs/production-grade-roadmap.md` for a detailed plan to evolve this prototype into a production-grade, multi-region platform capable of handling Uber-scale traffic.

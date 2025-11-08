@@ -4,13 +4,14 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"log/slog"
 	"net/http"
-	"os"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/example/ride-matching/internal/config"
 	"github.com/example/ride-matching/internal/dispatch"
 	"github.com/example/ride-matching/internal/geo"
 	"github.com/example/ride-matching/internal/ingest"
@@ -21,6 +22,9 @@ import (
 )
 
 type Server struct {
+	cfg    config.ServerConfig
+	logger *slog.Logger
+
 	Geo     geo.Geo
 	Matcher *matcher.Service
 	Store   storage.TripStore
@@ -29,23 +33,20 @@ type Server struct {
 	mux     *mux.Router
 }
 
-func NewServerFromEnv() *Server {
-	// env-driven wiring with sensible fallbacks
-	redisAddr := os.Getenv("REDIS_ADDR")
-	kafkaBrokers := os.Getenv("KAFKA_BROKERS")
-	pgDsn := os.Getenv("PG_DSN")
-
+func NewServer(cfg config.ServerConfig, logger *slog.Logger) (*Server, error) {
 	var ggeo geo.Geo
-	if redisAddr != "" {
-		ggeo = geo.NewRedisGeo(redisAddr, "", "drivers_geo")
+	if cfg.RedisAddr != "" {
+		ggeo = geo.NewRedisGeo(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisGeoKey)
 	} else {
 		ggeo = geo.NewIndex()
 	}
 
 	var store storage.TripStore
-	if pgDsn != "" {
-		if ps, err := storage.NewPostgresStore(pgDsn); err == nil {
+	if cfg.PGDSN != "" {
+		if ps, err := storage.NewPostgresStore(cfg.PGDSN); err == nil {
 			store = ps
+		} else {
+			logger.Warn("postgres store init failed, falling back to memory store", "error", err)
 		}
 	}
 	if store == nil {
@@ -53,16 +54,28 @@ func NewServerFromEnv() *Server {
 	}
 
 	var kp *ingest.KafkaProducer
-	if kafkaBrokers != "" {
-		kp = ingest.NewKafkaProducer([]string{kafkaBrokers}, "driver-locations")
+	if len(cfg.KafkaBrokers) > 0 {
+		kp = ingest.NewKafkaProducer(cfg.KafkaBrokers, cfg.KafkaTopic)
 	}
 
 	wsreg := dispatch.NewWSRegistry()
 
-	m := &matcher.Service{Geo: ggeo, Dispatch: wsreg, Store: store, DefaultSpeedMps: 10, TopN: 8}
-	s := &Server{Geo: ggeo, Matcher: m, Store: store, Kafka: kp, WSReg: wsreg, mux: mux.NewRouter()}
+	m := &matcher.Service{Geo: ggeo, Dispatch: wsreg, Store: store, DefaultSpeedMps: cfg.DefaultSpeedMps, TopN: cfg.MatcherTopN}
+
+	router := mux.NewRouter()
+	s := &Server{
+		cfg:     cfg,
+		logger:  logger,
+		Geo:     ggeo,
+		Matcher: m,
+		Store:   store,
+		Kafka:   kp,
+		WSReg:   wsreg,
+		mux:     router,
+	}
 	s.routes()
-	return s
+	s.registerMiddleware()
+	return s, nil
 }
 
 func (s *Server) routes() {

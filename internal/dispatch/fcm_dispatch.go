@@ -19,11 +19,23 @@ type FCMDispatcher struct {
 }
 
 func NewFCMDispatcher(endpoint, key string) *FCMDispatcher {
-	return &FCMDispatcher{Endpoint: endpoint, Key: key, Client: &http.Client{Timeout: 3 * time.Second}}
+	return &FCMDispatcher{
+		Endpoint: endpoint,
+		Key:      key,
+		Client:   &http.Client{Timeout: 3 * time.Second},
+	}
 }
 
 func (f *FCMDispatcher) Offer(rideID string, payload interface{}) error {
-	body := map[string]interface{}{"message": map[string]interface{}{"token": "", "data": map[string]interface{}{"ride_id": rideID, "offer": payload}}}
+	body := map[string]interface{}{
+		"message": map[string]interface{}{
+			"token": "",
+			"data": map[string]interface{}{
+				"ride_id": rideID,
+				"offer":   payload,
+			},
+		},
+	}
 	b, _ := json.Marshal(body)
 	req, _ := http.NewRequest("POST", f.Endpoint, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
